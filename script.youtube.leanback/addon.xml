@@ -2,6 +2,7 @@
 <addon id="script.youtube.leanback" name="Youtube Leanback" version="1.0" provider-name="Evans Jahja">
 	<requires>
 		<import addon="xbmc.python" version="2.25.0"/>
+		<import addon="script.module.requests" version="2.22.0"/>
 	</requires>
 	<extension point="xbmc.python.script" library="addon.py">
 		<provides>executable</provides>

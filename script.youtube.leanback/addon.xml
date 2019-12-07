@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="script.youtube.leanback" name="Youtube Leanback" version="1.0" provider-name="Evans Jahja">
+	<requires>
+		<import addon="xbmc.python" version="2.25.0"/>
+	</requires>
+	<extension point="xbmc.python.script" library="addon.py">
+		<provides>executable</provides>
+	</extension>
+	<extension point="xbmc.service" library="service.py"/>
+	<extension point="xbmc.addon.metadata">
+		<platform>linux windx</platform>
+		<summary lang="en"></summary>
+		<description lang="en">Watch YouTube on TV from your phone</description>
+		<language>en</language>
+		<source></source>
+		<website></website>
+		<forum></forum>
+		<email>evansjahja13@gmail.com</email>
+		<news></news>
+		<assets>
+			<icon>icon.png</icon>
+		</assets>
+	</extension>
+</addon>

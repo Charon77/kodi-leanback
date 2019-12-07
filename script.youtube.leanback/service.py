@@ -13,6 +13,7 @@ import threading
 from threading import Thread
 from requests import ConnectionError
 import sys
+import urllib3
 
 # Getting constants
 __addon__ = xbmcaddon.Addon('script.youtube.leanback')
@@ -26,6 +27,9 @@ yt_url_lounge_id = 'https://www.youtube.com/api/lounge/pairing/get_lounge_token_
 yt_url_bind = 'https://www.youtube.com/api/lounge/bc/bind'
 yt_url_pairing_code = 'https://www.youtube.com/api/lounge/pairing/get_pairing_code'
 
+
+video_ids = []
+playlist = None
 
 class LeanbackPlayer(xbmc.Player):
     global dialog
@@ -44,25 +48,40 @@ class LeanbackPlayer(xbmc.Player):
             'currentTime': self.getTime(),
             'state': '1',
             })
-    # def onAVChange(self):
-    #     dialog.textviewer("Callback", "AVCh")
-    # def onAVStarted(self):
-    #     dialog.textviewer("Callback", "AVStarted")
     def onPlayBackSeek(self, time, seekOffset):
         postBind("onStateChange", {
             'currentTime': self.getTime(),
             'state': '1',
             })
-    def onAVStarted(self):
-        self.seekTime(float(now_playing_state['currentTime']))
+    def onPlayBackStopped(self):
+        log("Stop")
+        postBind("onStateChange", {
+            'state': '4',
+            })
 
+    def onPlayBackStarted(self):
+        log("playbackstarted")
+        current_index = playlist.getposition()
+        if (current_index >= len(video_ids)):
+            playing_url = urllib3.util.parse_url(xbmc.getInfoLabel('Player.Filenameandpath'))
+
+            if (playing_url.host == 'plugin.video.youtube'):
+                video_id = playing_url.query.split('=')[1]
+                now_playing_state['videoId'] = video_id
+                postBind("nowPlaying", now_playing_state)
+        else:
+            log('current_index: ' + str(current_index))
+            video_id = video_ids[current_index]
+            now_playing_state['videoId'] = video_id
+            postBind("nowPlaying", now_playing_state)
+
+    def onAVStarted(self):
+        current_index = playlist.getposition()
+        self.seekTime(float(now_playing_state['currentTime']))
         postBind("onStateChange", {
             'currentTime': self.getTime(),
             'state': '1',
             })
-
-
-
 
 # Method to print logs on a standard way
 def log(message, level=xbmc.LOGNOTICE):
@@ -87,13 +106,19 @@ def postBind(key,val):
 
 
 def parseBind(obj):
+    global playlist
+    global video_ids
+
     log("Received " + json.dumps(obj))
     cmd = obj[0]
 
     if cmd == "noop":
         pass
-    elif cmd == "loungeStatus":
-        pass
+    elif cmd == 'loungeStatus':
+        devices = json.loads(obj[1]['devices'])
+        device_name = devices[-1]['name']
+        if not (device_name == screen_name):
+            xbmcgui.Dialog().notification("New Device Connected", device_name)
     elif cmd == "c":
         bind_params["SID"] = obj[1]
     elif cmd == "S":
@@ -106,31 +131,64 @@ def parseBind(obj):
             postBind("nowPlaying", now_playing_state)
     elif cmd == "setPlaylist":
         params = obj[1]
-        eventDetails = json.loads(params["eventDetails"])
-        videoId = eventDetails["videoId"]
-        player.play('plugin://plugin.video.youtube/play/?video_id={0}'.format(videoId))
-        log(json.dumps(obj))
+        #eventDetails = json.loads(params["eventDetails"])
 
-        now_playing_state['videoId'] = eventDetails["videoId"]
+        playlist.clear()
+
+        video_ids = params['videoIds'].split(',')
+        current_index = int(params['currentIndex'])
+
+        for video_id in video_ids:
+            video = 'plugin://plugin.video.youtube/play/?video_id={0}'.format(video_id)
+            playlist.add(url=video)
+
+        player.play(playlist, startpos=current_index)
+
+        #videoId = video_ids[current_index]
+
+        #player.play('plugin://plugin.video.youtube/play/?video_id={0}'.format(videoId))
+
+        now_playing_state['videoId'] = video_ids[current_index]
         now_playing_state['listId'] = params["listId"]
         now_playing_state['ctt'] = params['ctt']
         now_playing_state['currentTime'] = params['currentTime']
-        now_playing_state['currentIndex'] = '0'
+        now_playing_state['currentIndex'] = current_index
+        now_playing_state['state'] = '3'
+        postBind("nowPlaying", now_playing_state)
+
+    elif cmd == "updatePlaylist":
+        playlist.clear()
+        params = obj[1]
+        video_ids = params['videoIds'].split(',')
+        for video_id in video_ids:
+            video = 'plugin://plugin.video.youtube/play/?video_id={0}'.format(video_id)
+            playlist.add(url=video)
+
+
+    elif cmd == "previous":
+        #current_index -= 1
+        #player.play(playlist, startpos=current_index)
+        player.playprevious()
+        current_index = playlist.getposition()
+
+        now_playing_state['videoId'] = video_ids[current_index]
+        now_playing_state['currentIndex'] = current_index
         now_playing_state['state'] = '3'
 
         postBind("nowPlaying", now_playing_state)
 
+    elif cmd == "next":
+        #current_index += 1
+        #player.play(playlist, startpos=current_index)
+        player.playnext()
+        current_index = playlist.getposition()
 
-        # now_playing_state['state'] = '1'
-        # postBind("onStateChange", {
-        #     'currentTime': '15',
-        #     'state': '1',
-        #     'duration': '50',
-        #     'cpn': 'foo',
-        #     })
-        #dialog.textviewer("Set Playlist", videoId)
-    #elif cmd == "updatePlaylist":
-        #dialog.textviewer("Update Playlist", json.dumps(obj))
+        now_playing_state['videoId'] = video_ids[current_index]
+        now_playing_state['currentIndex'] = current_index
+        now_playing_state['state'] = '3'
+
+        postBind("nowPlaying", now_playing_state)
+
     elif cmd == "pause":
         player.pause()
         now_playing_state['state'] = '2'
@@ -141,14 +199,24 @@ def parseBind(obj):
             #'cpn': 'foo',
             })
     elif cmd == "play":
-        player.pause()
+        log("is Playing:" + str(player.isPlaying()))
+        if not player.isPlaying():
+            now_playing_state['state'] = '3'
+            postBind("onStateChange", {
+                'state': now_playing_state['state'],
+            })
+            player.play('plugin://plugin.video.youtube/play/?video_id={0}'.format(now_playing_state['videoId']))
+        else:
+            player.pause()
         now_playing_state['state'] = '1'
         postBind("onStateChange", {
-            'currentTime': player.getTime(),
-            'state': now_playing_state['state'],
-            #'duration': '50',
-            #'cpn': 'foo',
-            })
+        'currentTime': player.getTime(),
+        'state': now_playing_state['state'],
+        })
+    elif cmd == 'stopVideo':
+        playlist.clear()
+        #player.stop()
+
     elif cmd == "seekTo":
         newTime = obj[1]['newTime']
         player.seekTime(float(newTime))
@@ -165,7 +233,6 @@ def parseBind(obj):
             "volume": newVolume,
             "muted": "false"}
         )
-
     else:
         log("Unknown command")
         log(json.dumps(obj))
@@ -224,6 +291,8 @@ if __name__ == '__main__':
     ofs = 0
     # Starting the Addon
     log("Starting " + __addonName__)
+
+    playlist = xbmc.PlayList(xbmc.PLAYLIST_VIDEO)
 
     dialog = xbmcgui.Dialog()
 

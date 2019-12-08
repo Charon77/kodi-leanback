@@ -39,24 +39,26 @@ class LeanbackPlayer(xbmc.Player):
     #     pass
 
     def onPlayBackPaused(self):
+        now_playing_state['state'] = '2'
         postBind("onStateChange", {
             'currentTime': self.getTime(),
-            'state': '2',
+            'state': now_playing_state['state'],
             })
     def onPlayBackResumed(self):
+        now_playing_state['state'] = '1'
         postBind("onStateChange", {
             'currentTime': self.getTime(),
-            'state': '1',
+            'state': now_playing_state['state'],
             })
     def onPlayBackSeek(self, time, seekOffset):
         postBind("onStateChange", {
             'currentTime': self.getTime(),
-            'state': '1',
             })
     def onPlayBackStopped(self):
         log("Stop")
+        now_playing_state['state'] = '4'
         postBind("onStateChange", {
-            'state': '4',
+            'state': now_playing_state['state'],
             })
 
     def onPlayBackStarted(self):
@@ -78,9 +80,10 @@ class LeanbackPlayer(xbmc.Player):
     def onAVStarted(self):
         current_index = playlist.getposition()
         self.seekTime(float(now_playing_state['currentTime']))
+        now_playing_state['state'] = '1'
         postBind("onStateChange", {
             'currentTime': self.getTime(),
-            'state': '1',
+            'state': now_playing_state['state'],
             })
 
 # Method to print logs on a standard way
@@ -103,6 +106,8 @@ def postBind(key,val):
     #dialog.textviewer("Post Bind A", json.dumps(post_params))
 
     requests.post(yt_url_bind, params=bind_params, data=post_params)
+
+    log("Post Bind " + json.dumps(post_params))
 
 
 def parseBind(obj):
@@ -129,6 +134,14 @@ def parseBind(obj):
             postBind("nowPlaying", {})
         else:
             postBind("nowPlaying", now_playing_state)
+    elif cmd == 'remoteConnected':
+        pass
+        # postBind("nowPlaying", now_playing_state)
+        # postBind("onStateChange", {
+        #     'currentTime': player.getTime(),
+        #     'state': now_playing_state['state'],
+        #     })
+
     elif cmd == "setPlaylist":
         params = obj[1]
         #eventDetails = json.loads(params["eventDetails"])
@@ -155,15 +168,31 @@ def parseBind(obj):
         now_playing_state['currentIndex'] = current_index
         now_playing_state['state'] = '3'
         postBind("nowPlaying", now_playing_state)
+        log("video_ids: " + str(video_ids))
 
     elif cmd == "updatePlaylist":
-        playlist.clear()
         params = obj[1]
-        video_ids = params['videoIds'].split(',')
-        for video_id in video_ids:
-            video = 'plugin://plugin.video.youtube/play/?video_id={0}'.format(video_id)
-            playlist.add(url=video)
 
+        eventType = None
+
+        if 'eventDetails' in params:
+            eventDetails = json.loads(params['eventDetails'])
+            eventType = eventDetails['eventType']
+
+        if eventType == 'PLAYLIST_CLEARED':
+            playlist.clear()
+            player.stop()
+
+        if ((not eventType) or (eventType == 'VIDEO_ADDED')):
+
+            playlist.clear()
+
+            video_ids = params['videoIds'].split(',')
+            for video_id in video_ids:
+                video = 'plugin://plugin.video.youtube/play/?video_id={0}'.format(video_id)
+                playlist.add(url=video)
+
+        log("video_ids: " + str(video_ids))
 
     elif cmd == "previous":
         #current_index -= 1

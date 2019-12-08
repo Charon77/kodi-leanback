@@ -15,6 +15,8 @@ from requests import ConnectionError
 import sys
 import urllib3
 
+import traceback
+
 # Getting constants
 __addon__ = xbmcaddon.Addon('script.youtube.leanback')
 __addonId__ = __addon__.getAddonInfo('id')
@@ -45,14 +47,16 @@ class LeanbackPlayer(xbmc.Player):
             'state': now_playing_state['state'],
             })
     def onPlayBackResumed(self):
-        now_playing_state['state'] = '1'
-        postBind("onStateChange", {
-            'currentTime': self.getTime(),
-            'state': now_playing_state['state'],
-            })
+        pass
+        # now_playing_state['state'] = '1'
+        # postBind("onStateChange", {
+        #     'currentTime': self.getTime(),
+        #     'state': now_playing_state['state'],
+        #     })
     def onPlayBackSeek(self, time, seekOffset):
         postBind("onStateChange", {
             'currentTime': self.getTime(),
+            'state': now_playing_state['state'],
             })
     def onPlayBackStopped(self):
         log("Stop")
@@ -81,10 +85,10 @@ class LeanbackPlayer(xbmc.Player):
         current_index = playlist.getposition()
         self.seekTime(float(now_playing_state['currentTime']))
         now_playing_state['state'] = '1'
-        postBind("onStateChange", {
-            'currentTime': self.getTime(),
-            'state': now_playing_state['state'],
-            })
+        # postBind("onStateChange", {
+        #     'currentTime': self.getTime(),
+        #     'state': now_playing_state['state'],
+        #     })
 
 # Method to print logs on a standard way
 def log(message, level=xbmc.LOGNOTICE):
@@ -92,6 +96,7 @@ def log(message, level=xbmc.LOGNOTICE):
 # end of log
 
 def postBind(key,val):
+    traceback.print_stack(limit=3)
     global ofs
     ofs += 1
     post_params = {}
@@ -151,6 +156,15 @@ def parseBind(obj):
         video_ids = params['videoIds'].split(',')
         current_index = int(params['currentIndex'])
 
+        now_playing_state['videoId'] = video_ids[current_index]
+        now_playing_state['listId'] = params["listId"]
+        now_playing_state['ctt'] = params['ctt']
+        now_playing_state['currentTime'] = params['currentTime']
+        now_playing_state['currentIndex'] = current_index
+        now_playing_state['state'] = '3'
+
+        postBind("nowPlaying", now_playing_state)
+        log("video_ids: " + str(video_ids))
         for video_id in video_ids:
             video = 'plugin://plugin.video.youtube/play/?video_id={0}'.format(video_id)
             playlist.add(url=video)
@@ -161,14 +175,6 @@ def parseBind(obj):
 
         #player.play('plugin://plugin.video.youtube/play/?video_id={0}'.format(videoId))
 
-        now_playing_state['videoId'] = video_ids[current_index]
-        now_playing_state['listId'] = params["listId"]
-        now_playing_state['ctt'] = params['ctt']
-        now_playing_state['currentTime'] = params['currentTime']
-        now_playing_state['currentIndex'] = current_index
-        now_playing_state['state'] = '3'
-        postBind("nowPlaying", now_playing_state)
-        log("video_ids: " + str(video_ids))
 
     elif cmd == "updatePlaylist":
         params = obj[1]
@@ -191,6 +197,9 @@ def parseBind(obj):
             for video_id in video_ids:
                 video = 'plugin://plugin.video.youtube/play/?video_id={0}'.format(video_id)
                 playlist.add(url=video)
+
+        #now_playing_state['state'] = '3'
+        #postBind("nowPlaying", now_playing_state)
 
         log("video_ids: " + str(video_ids))
 
@@ -221,14 +230,16 @@ def parseBind(obj):
     elif cmd == "pause":
         player.pause()
         now_playing_state['state'] = '2'
-        postBind("onStateChange", {
-            'currentTime': player.getTime(),
-            'state': now_playing_state['state'],
-            #'duration': '50',
-            #'cpn': 'foo',
-            })
+        # postBind("onStateChange", {
+        #     'currentTime': player.getTime(),
+        #     'state': now_playing_state['state'],
+        #     #'duration': '50',
+        #     #'cpn': 'foo',
+        #     })
     elif cmd == "play":
         log("is Playing:" + str(player.isPlaying()))
+
+        # Do we currently have a video loaded?
         if not player.isPlaying():
             now_playing_state['state'] = '3'
             postBind("onStateChange", {
@@ -236,12 +247,18 @@ def parseBind(obj):
             })
             player.play('plugin://plugin.video.youtube/play/?video_id={0}'.format(now_playing_state['videoId']))
         else:
+            # Unpause video
             player.pause()
-        now_playing_state['state'] = '1'
-        postBind("onStateChange", {
-        'currentTime': player.getTime(),
-        'state': now_playing_state['state'],
-        })
+            now_playing_state['state'] = '1'
+            postBind("onStateChange", {
+                'currentTime': player.getTime(),
+                'state': now_playing_state['state'],
+                })
+        # now_playing_state['state'] = '1'
+        # postBind("onStateChange", {
+        # 'currentTime': player.getTime(),
+        # 'state': now_playing_state['state'],
+        # })
     elif cmd == 'stopVideo':
         playlist.clear()
         #player.stop()
@@ -289,8 +306,8 @@ class BindThread(Thread):
                 log("Bind Thread not okay")
 
             for line in self.bind_stream.iter_lines():
-                log("line read")
-                log(line)
+                #log("line read")
+                #log(line)
 
                 try:
                     int(line)

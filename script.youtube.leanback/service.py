@@ -32,6 +32,7 @@ yt_url_pairing_code = 'https://www.youtube.com/api/lounge/pairing/get_pairing_co
 
 video_ids = []
 playlist = None
+lastSeq = None
 
 class LeanbackPlayer(xbmc.Player):
     global dialog
@@ -115,9 +116,21 @@ def postBind(key,val):
     log("Post Bind " + json.dumps(post_params))
 
 
-def parseBind(obj):
+def parseBind(packet):
     global playlist
     global video_ids
+    global lastSeq
+    seq = int(packet[0])
+    obj = packet[1]
+
+    if (lastSeq == None):
+        lastSeq = seq
+    else:
+        # Continue only if seq is bigger than lastSeq
+        if (seq > lastSeq):
+            lastSeq = seq
+        else:
+            return
 
     log("Received " + json.dumps(obj))
     cmd = obj[0]
@@ -322,8 +335,8 @@ class BindThread(Thread):
                 except (ValueError, TypeError):
                     pass
                 else:
-                    for item in list_of_items:
-                        obj = item[1]
+                    log("parse_bind bind_thread" + json_buffer)
+                    for obj in list_of_items:
                         parseBind(obj)
 
     def kill(self):
@@ -414,8 +427,9 @@ if __name__ == '__main__':
     bind_resp = ''.join(bind_resp.split('\n')[1:])
     bind_resp_obj = json.loads(bind_resp)
 
+    log("parse_bind bind_resp_obj " + bind_resp)
     for obj in bind_resp_obj:
-        parseBind(obj[1])
+        parseBind(obj)
 
     player = LeanbackPlayer()
     x = BindThread()
